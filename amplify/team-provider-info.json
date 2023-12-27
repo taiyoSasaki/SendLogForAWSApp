@@ -1,0 +1,33 @@
+{
+  "dev": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-sendlogforawsapp-dev-174450-authRole",
+      "UnauthRoleArn": "arn:aws:iam::564991763127:role/amplify-sendlogforawsapp-dev-174450-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::564991763127:role/amplify-sendlogforawsapp-dev-174450-authRole",
+      "Region": "ap-northeast-1",
+      "DeploymentBucketName": "amplify-sendlogforawsapp-dev-174450-deployment",
+      "UnauthRoleName": "amplify-sendlogforawsapp-dev-174450-unauthRole",
+      "StackName": "amplify-sendlogforawsapp-dev-174450",
+      "StackId": "arn:aws:cloudformation:ap-northeast-1:564991763127:stack/amplify-sendlogforawsapp-dev-174450/16d6dd30-74a5-11ee-b098-0e6b396cf74b",
+      "AmplifyAppId": "d8adv5cmmv2vp"
+    },
+    "categories": {
+      "auth": {
+        "sendlogforawsapp9e7a0e34": {}
+      },
+      "storage": {
+        "SendLogForAWSS3": {}
+      },
+      "function": {
+        "S3Trigger3db776fd": {
+          "deploymentBucketName": "amplify-sendlogforawsapp-dev-174450-deployment",
+          "s3Key": "amplify-builds/S3Trigger3db776fd-4372396c777646376b76-build.zip"
+        },
+        "S3Trigger4c4b0f62": {
+          "deploymentBucketName": "amplify-sendlogforawsapp-dev-174450-deployment",
+          "s3Key": "amplify-builds/S3Trigger4c4b0f62-5a36394942782f486351-build.zip"
+        }
+      }
+    }
+  }
+}
