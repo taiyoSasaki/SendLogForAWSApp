@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <solid android:color="#ff8c00" />
+    <!-- 背景の色 -->
+
+    <stroke
+        android:width="5dp"
+        android:color="#ff8c00" />
+    <!-- 枠線の太さ -->
+    <!-- 枠線の色 -->
+
+    <corners android:radius="20dp" />
+    <!-- 角の丸みを指定 (任意) -->
+
+</shape>

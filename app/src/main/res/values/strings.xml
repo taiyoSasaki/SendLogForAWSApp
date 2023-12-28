@@ -1,3 +1,12 @@
 <resources>
     <string name="app_name">SendLogForAWSApp</string>
+
+    <!-- 共通 -->
+    <string name="version">v1.1.a</string>
+
+    <!-- アップロード画面 -->
+    <string name="upload_log">ログを送信する</string>
+    <string name="zip_dialog">データを圧縮しています</string>
+    <string name="upload_dialog">データを送信中です</string>
+
 </resources>

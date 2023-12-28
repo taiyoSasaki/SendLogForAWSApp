@@ -1,7 +1,10 @@
 package jp.co.ods.sendlogforawsapp
 
 import android.app.AlertDialog
+import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
@@ -35,38 +38,45 @@ class MainActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        mobileClient = AWSMobileClient.getInstance()
+    }
 
-        val mobileClientLatch = CountDownLatch(1)
-        mobileClient.initialize(applicationContext, object : Callback<UserStateDetails> {
-            override fun onResult(result: UserStateDetails?) {
-                mobileClientLatch.countDown()
+    override fun onResume() {
+        super.onResume()
+
+        // インターネットに接続されているかを確認する
+        checkNetworkStatus()
+    }
+
+    private fun checkNetworkStatus() {
+        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = connectivityManager.activeNetwork
+        val capabilities = connectivityManager.getNetworkCapabilities(network)
+        if (capabilities != null && (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR))) {
+            //インターネットに接続されている
+            mobileClient = AWSMobileClient.getInstance()
+            val mobileClientLatch = CountDownLatch(1)
+            mobileClient.initialize(applicationContext, object : Callback<UserStateDetails> {
+                override fun onResult(result: UserStateDetails?) {
+                    mobileClientLatch.countDown()
+                }
+
+                override fun onError(e: Exception?) {
+                    Log.e("onError", "Initialization error.", e)
+                }
+            })
+
+            try {
+                if (!mobileClientLatch.await(2000L, TimeUnit.MILLISECONDS)) throw Exception("Failed to initialize mobile client.")
+            } catch (exception: Exception) {
+                Log.d("exception", "${exception.message}")
             }
 
-            override fun onError(e: Exception?) {
-                Log.e("onError", "Initialization error.", e)
-            }
-        })
+            login("taiyo.sasaki@ods.co.jp", "0601Shine")
 
-        try {
-            if (!mobileClientLatch.await(2000L, TimeUnit.MILLISECONDS)) throw Exception("Failed to initialize mobile client.")
-        } catch (exception: Exception) {
-            Log.d("exception", "${exception.message}")
+        } else { //インーネットに接続されていない
+            createDialog("インターネットに接続してください")
         }
 
-        binding.loginButton.setOnClickListener {
-            val username = binding.userIdEditText.text.toString()
-            val password = binding.passwordEditText.text.toString()
-
-            login(username, password)
-        }
-
-        binding.createAccountButton.setOnClickListener {
-            val intent = Intent(this, SignUpActivity::class.java)
-            startActivity(intent)
-        }
-
-        login("taiyo.sasaki@ods.co.jp", "0601Shine")
 
     }
 
@@ -100,7 +110,9 @@ class MainActivity : AppCompatActivity(), CoroutineScope by MainScope() {
     private fun createDialog(message: String?) {
         AlertDialog.Builder(this)
             .setMessage(message)
-            .setPositiveButton("OK", null)
+            .setPositiveButton("OK") { _, _ ->
+                finish()
+            }
             .show()
     }
 

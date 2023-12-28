@@ -1,15 +1,16 @@
 package jp.co.ods.sendlogforawsapp
 
-import android.app.Activity
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
-import android.provider.OpenableColumns
 import android.provider.Settings
 import android.util.Log
+import android.view.LayoutInflater
+import android.widget.ProgressBar
+import android.widget.TextView
 import androidx.annotation.RequiresApi
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.amazonaws.mobile.client.AWSMobileClient
 import com.amplifyframework.core.Amplify
@@ -26,11 +27,12 @@ import java.util.zip.ZipOutputStream
 
 @RequiresApi(Build.VERSION_CODES.R)
 class UploadActivity :AppCompatActivity(), CoroutineScope by MainScope() {
-
-    private val READ_REQUEST_CODE = 100
-
     private lateinit var binding: ActivityUploadBinding
     private lateinit var mobileClient: AWSMobileClient
+
+    private lateinit var dialog: AlertDialog
+    private lateinit var progressBar: ProgressBar
+    private lateinit var progressText: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,29 +44,22 @@ class UploadActivity :AppCompatActivity(), CoroutineScope by MainScope() {
         //「全てのファイルへのアクセス」許可の確認
         checkStoragePermission()
 
-        // 「upload to s3」ボタン
-        binding.uploadButton.setOnClickListener {
-            selectFile()
-        }
+        binding.uploadLogButton.setOnClickListener {
+            // アップロード中のダイアログ
+            val inflater = LayoutInflater.from(this)
+            val view = inflater.inflate(R.layout.upload_progress_dialog, null)
 
-        // 「zip folder」ボタン
-        binding.zipButton.setOnClickListener {
-            zipFolder()
-        }
+            val builder = AlertDialog.Builder(this)
+            builder.setView(view)
+            builder.setCancelable(false)
 
+            dialog = builder.create()
+            dialog.show()
 
-    }
+            progressBar = dialog.findViewById<ProgressBar>(R.id.progressBarHorizontal)!!
+            progressText = dialog.findViewById<TextView>(R.id.textViewProgress)!!
 
-    private fun zipFolder() {
-        val downloadFolder = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        val fileToZip = File(downloadFolder, "ziptest")
-
-        Log.d("zipFolder", "${fileToZip.path}, ${fileToZip.name}")
-
-        if (fileToZip.exists() && fileToZip.isDirectory) {
             archive(File("/storage/emulated/0/debuglogger/mobilelog"), File("/storage/emulated/0/debuglogger/mobilelog.zip"))
-        } else {
-            Log.d("zipFolder", "fileToZipが存在しないもしくはフォルダーではありません。")
         }
 
     }
@@ -77,8 +72,12 @@ class UploadActivity :AppCompatActivity(), CoroutineScope by MainScope() {
                     //ファイルならばそのままルートにデータを流し込む
                     zos.putNextEntry(ZipEntry(source.name))
                     source.inputStream().copyTo(zos, 256)
+                    GlobalScope.launch(Dispatchers.Main) {
+                        progressBar.progress += 20
+                    }
                 } else {
                     // ディレクトリの場合
+                    var count = true
                     source.walk()
                         .filterNot { it.isHidden } // 隠しファイルは除外
                         .forEach {file->
@@ -86,10 +85,29 @@ class UploadActivity :AppCompatActivity(), CoroutineScope by MainScope() {
                                 // ディレクトリだった場合、Zipの中にディレクトリを切る
                                 zos.putNextEntry(ZipEntry("${file.relativeTo(source)}/"))
                                 zos.closeEntry()
+
+                                if (count) {
+                                    GlobalScope.launch(Dispatchers.Main) {
+                                        progressBar.progress += 1
+                                    }
+                                    count = false
+                                } else {
+                                    count = true
+                                }
+
                             } else {
                                 // ファイルだった場合、データを流し込む
                                 zos.putNextEntry(ZipEntry(file.relativeTo(source).toString()))
                                 file.inputStream().copyTo(zos, 256)
+
+                                if (count) {
+                                    GlobalScope.launch(Dispatchers.Main) {
+                                        progressBar.progress += 1
+                                    }
+                                    count = false
+                                } else {
+                                    count = true
+                                }
                             }
                         }
                 }
@@ -98,46 +116,41 @@ class UploadActivity :AppCompatActivity(), CoroutineScope by MainScope() {
 
         job.invokeOnCompletion {
             if (it == null) { // 処理が成功した場合
-                Log.d("job", "zip化が完了")
+                Log.d("zipJob", "zip化が完了")
+
+                // プログレスバーの進行状況を変更
+                progressBar.progress += 5
+                progressText.text = getString(R.string.upload_dialog)
+
+                upload(File("/storage/emulated/0/debuglogger/mobilelog.zip"))
             } else { // 処理にエラー
-                Log.d("job", "何らかのエラーが発生")
+                Log.d("zipJob", "何らかのエラーが発生")
             }
         }
 
     }
 
-    private fun selectFile() {
-        //ファイルを選ぶ
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
-        intent.addCategory(Intent.CATEGORY_OPENABLE)
-        intent.type = "*/*"
-        startActivityForResult(intent, READ_REQUEST_CODE)
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == READ_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
-            val uri: Uri? = data?.data
-            if (uri != null) {
-                Log.d("selectFile", "${uri.path}")
-
-                val file = getFileFromUri(uri)
-
-                if (file != null) {
-                    upload(file)
-                } else {
-                    Log.d("selectFile", "file is null")
-                }
-            }
-        }
-    }
-
+    @OptIn(DelicateCoroutinesApi::class)
     private fun upload(file: File) {
-        Amplify.Storage.uploadFile(file.name, file,
-            { Log.i("upload", "Successfully uploaded: ${it.key}") },
-            { Log.e("upload", "Upload failed", it) }
-        )
+        GlobalScope.launch (Dispatchers.IO) {
+            Amplify.Storage.uploadFile(file.name, file,
+                { Log.i("upload", "Successfully uploaded: ${it.key}")
+                    Log.d("uploadJob", "アップロードが完了")
+                    // プログレスバーの進行状況を変更
+                    progressBar.progress = 100
+                    // ダイアログを閉じる
+                    dialog.dismiss()
+
+                    createDialog("データを送信が完了しました。")
+                },
+                {
+                    Log.e("upload", "Upload failed", it)
+                    // ダイアログを閉じる
+                    dialog.dismiss()
+                    createDialog("データを送信できませんでした。\nもう一度お試しください")
+                }
+            )
+        }
     }
 
     //「すべてのファイルへのアクセス」許可の確認
@@ -150,40 +163,11 @@ class UploadActivity :AppCompatActivity(), CoroutineScope by MainScope() {
         }
     }
 
-    // ファイルをcashフォルダーにコピーしてそのFile型変数を返す
-    private fun getFileFromUri(uri: Uri) :File? {
-        val fileName = getFileNameFromUri(uri)
-        Log.d("selectFile", fileName)
-
-        val inputStream = contentResolver.openInputStream(uri)
-        val file = File(cacheDir, fileName) //保存先のファイルパスを指定
-
-        inputStream?.use {
-            file.outputStream().use { output ->
-                it.copyTo(output)
-            }
-        }
-        return if (file.exists()) file else null
-    }
-
-    private fun getFileNameFromUri(uri: Uri): String {
-        var result = ""
-        if (uri.scheme == "content") {
-            contentResolver.query(uri, null, null, null, null)?.use {
-                if (it.moveToFirst()) {
-                    val  displayName = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                    result = it.getString(displayName)
-                }
-            }
-        }
-        if(result.isBlank()) {
-            result = uri.path ?: ""
-            val cut = result.lastIndexOf('/')
-            if (cut != -1) {
-                result = result.substring(cut + 1)
-            }
-        }
-        return result
+    private fun createDialog(message: String?) {
+        android.app.AlertDialog.Builder(this)
+            .setMessage(message)
+            .setPositiveButton("OK", null)
+            .show()
     }
 
 }
